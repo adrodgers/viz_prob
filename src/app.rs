@@ -10,6 +10,7 @@ pub enum Distributions {
     Uniform(Uniform),
     Gaussian(Gaussian),
     Gamma(Gamma),
+    LogNormal(LogNormal),
 }
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct Uniform {
@@ -205,6 +206,66 @@ impl Gamma {
     }
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+pub struct LogNormal {
+    name: String,
+    mu: f64,
+    sigma: f64,
+}
+
+impl Default for LogNormal {
+    fn default() -> Self {
+        Self {
+            name: "LogNormal".to_string(),
+            mu: 0.,
+            sigma: 1.,
+        }
+    }
+}
+
+impl LogNormal {
+    pub fn ui(&mut self, ui: &mut Ui) {
+        ui.label("Uniform");
+        ui.add(egui::DragValue::new(&mut self.mu).prefix("mu: "));
+        ui.add(
+            egui::DragValue::new(&mut self.sigma)
+                .clamp_range(0. ..=f64::INFINITY)
+                .prefix("sigma: "),
+        );
+    }
+
+    pub fn calculate_pdf(&self, x: Vec<f64>) -> Vec<[f64; 2]> {
+        // let mut source = source::default(42);
+        let distribution = probability::distribution::Lognormal::new(self.mu, self.sigma);
+        x.into_iter()
+            .map(|x| [x, distribution.density(x)])
+            .collect()
+    }
+
+    pub fn calculate_cdf(&self, x: Vec<f64>) -> Vec<[f64; 2]> {
+        // let mut source = source::default(42);
+        let distribution = probability::distribution::Lognormal::new(self.mu, self.sigma);
+        x.into_iter()
+            .map(|x| [x, distribution.distribution(x)])
+            .collect()
+    }
+
+    pub fn plot(&self, ui: &mut Ui) {
+        let x: Vec<f64> = linspace::<f64>(-10., 10., 1000).collect();
+        let data_pdf = self.calculate_pdf(x.clone());
+        let line_pdf = Line::new(data_pdf).name("pdf");
+        let data_cdf = self.calculate_cdf(x);
+        let line_cdf = Line::new(data_cdf).name("cdf");
+        Plot::new("uniform_plot")
+            .view_aspect(2.0)
+            .legend(Legend::default())
+            .show(ui, |plot_ui| {
+                plot_ui.line(line_pdf);
+                plot_ui.line(line_cdf);
+            });
+    }
+}
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize, PartialEq)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -273,6 +334,7 @@ impl eframe::App for VizProbApp {
                         Distributions::Uniform(dist) => &dist.name,
                         Distributions::Gaussian(dist) => &dist.name,
                         Distributions::Gamma(dist) => &dist.name,
+                        Distributions::LogNormal(dist) => &dist.name,
                     }
                 ))
                 .show_ui(ui, |ui| {
@@ -291,11 +353,17 @@ impl eframe::App for VizProbApp {
                         Distributions::Gamma(Gamma::default()),
                         "Gamma",
                     );
+                    ui.selectable_value(
+                        distribution,
+                        Distributions::LogNormal(LogNormal::default()),
+                        "LogNormal",
+                    );
                 });
             match distribution {
                 Distributions::Uniform(dist) => dist.ui(ui),
                 Distributions::Gaussian(dist) => dist.ui(ui),
                 Distributions::Gamma(dist) => dist.ui(ui),
+                Distributions::LogNormal(dist) => dist.ui(ui),
             }
         });
 
@@ -305,6 +373,7 @@ impl eframe::App for VizProbApp {
                 Distributions::Uniform(dist) => dist.plot(ui),
                 Distributions::Gaussian(dist) => dist.plot(ui),
                 Distributions::Gamma(dist) => dist.plot(ui),
+                Distributions::LogNormal(dist) => dist.plot(ui),
             }
             egui::warn_if_debug_build(ui);
         });
